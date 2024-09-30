@@ -64,3 +64,32 @@ lm_fit |>
          dot_args = list(size=2, color = "black"),
          whisker_args = list(color = "black")) + 
   theme_bw()
+
+
+# prognozowanie
+
+new_points <- expand.grid(initial_volume = seq(5,45,5),
+                          food_regime = c("Initial", "Low", "High"))
+
+# prognoza średniej wartości
+mean_pred <- predict(object = lm_fit, new_data = new_points)
+
+# prognoza przedziału ufności
+conf_pred <- predict(object = lm_fit, new_data = new_points, type = "conf_int")
+
+# łączenie danych
+lm_pred <- 
+  new_points |>
+  bind_cols(mean_pred) |> 
+  bind_cols(conf_pred)
+
+# wykres danych
+lm_pred |> 
+  ggplot(aes(x = food_regime, y = .pred)) +
+  geom_point() + 
+  geom_errorbar(aes(ymin = .pred_lower, ymax = .pred_upper),
+                width = 0.2) + 
+  facet_wrap(~ initial_volume) +
+  theme_bw() + 
+  labs(y="urchni size")
+  
