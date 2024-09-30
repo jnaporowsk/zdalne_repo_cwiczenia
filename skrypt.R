@@ -27,7 +27,7 @@ urchins
 urchins |> is.na() |> as_tibble() |> summarise_all(sum)
 
 
-#
+# pierwsza analiza wykresu
 urchins |> ggplot(aes(
   x = initial_volume,
   y = width,
@@ -37,3 +37,30 @@ urchins |> ggplot(aes(
   geom_point() +
   geom_smooth(method = lm, se = F) +
   scale_color_viridis_d(option = "C", end = .9)
+
+# dopasowanie modelu
+
+lm_mod <- linear_reg() |> 
+  set_engine("lm")
+
+lm_fit <- 
+  lm_mod |> 
+  fit(width ~ initial_volume * food_regime, data=urchins)
+
+# różne przedstawienie modelu
+print(lm_fit, digits = 5)
+
+lm_fit$fit |> summary()
+
+lm_fit |> tidy()
+
+lm_fit |> tidy(conf.int = T)
+
+# wykres wyników regresji z pakietem dotwhisker
+
+lm_fit |> 
+  tidy() |> 
+  dwplot(vline = geom_vline(xintercept = 0, color = "grey50", linetype = 2),
+         dot_args = list(size=2, color = "black"),
+         whisker_args = list(color = "black")) + 
+  theme_bw()
