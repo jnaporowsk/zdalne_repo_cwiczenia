@@ -1,5 +1,4 @@
 # biblioteki
-
 library(parsnip)
 library(tidymodels)
 library(tidyverse)
@@ -92,4 +91,48 @@ lm_pred |>
   facet_wrap(~ initial_volume) +
   theme_bw() + 
   labs(y="urchni size")
-  
+
+
+
+# inne metody estymacji
+prior_dist <- rstanarm::student_t(df=1)
+
+set.seed(123)
+
+
+bayes_mod <- 
+  linear_reg() |> 
+  set_engine(engine = "stan",
+             prior_intercept = prior_dist,
+             prior = prior_dist)
+
+# estymacja modelu
+
+bayes_fit <- 
+  bayes_mod |> 
+  fit(width ~ initial_volume * food_regime, data = urchins)
+
+bayes_fit |> print(digits = 4)
+
+bayes_fit |> tidy(conf.int = T)
+
+
+# predykcja
+
+bayes_pred <- 
+  new_points |> 
+  bind_cols(predict(bayes_fit, new_data = new_points)) |> 
+  bind_cols(predict(bayes_fit, new_data = new_points, type = "conf_int"))
+
+# wykres
+
+bayes_pred |> 
+  ggplot(aes(x = food_regime,
+             y = .pred)) +
+  geom_point() + 
+  geom_errorbar(aes(ymin = .pred_lower,
+                    ymax = .pred_upper),
+                width = 0.2) +
+  facet_wrap(~ initial_volume) + 
+  theme_bw() + 
+  labs(y = "urchni size")
