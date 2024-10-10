@@ -5,6 +5,8 @@ library(tidyverse)
 library(readr)
 library(broom.mixed)
 library(dotwhisker)
+install.packages("GGally")
+library(GGally)
 
 colnames(airquality) <- tolower(colnames(airquality))
 
@@ -41,3 +43,7 @@ ggplot(air, aes(x = ozone, y = predict_ozone$.pred)) +
        x = "Rzeczywiste Ozone",
        y = "Prognozowane Ozone") +
   theme_minimal()
+
+
+# ggally
+ggpairs(air[, c("ozone", "solar.r", "wind", "temp", "month")])
