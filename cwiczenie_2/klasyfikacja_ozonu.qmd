@@ -1,0 +1,197 @@
+---
+title: "Klasyfikacja ozonu" 
+author: 
+        - Jakub Naporowski 
+        - Informatyka Geoprzestrzenna
+        - "423583"
+date: today 
+format: 
+  html:
+    toc: true
+    toc-depth: 3
+    toc-location: right
+    toc-title: Spis Treści
+    number-sections: true
+    number-depth: 3
+    embed-resources: true
+    html-math-method: katex
+    code-tools: true
+    code-block-bg: true
+    code-fold: show
+    code-summary: "Show and hide code"
+    link-external-icon: true
+    link-external-newwindow: true
+    smooth-scroll: true
+    self-contained: true
+    citation: true
+    theme: 
+        dark: solar
+        light: flatly
+    fontsize: 1.0em
+    linestretch: 1.3
+    fig-align: center
+execute: 
+  echo: true
+  error: false
+  warning: false
+  output: true
+---
+
+## Biblioteki
+
+```{r}
+library(tidymodels) 
+library(tidyverse)
+library(skimr) 
+library(GGally) 
+library(openair) 
+library(glmnet)
+```
+
+## Przygotowanie danych
+
+### Zaczniemy do wybrania roku i przygotowania danych
+
+```{r}
+air <- mydata |> selectByDate(year = 2004) 
+air |> skim()
+
+air <- air |> na.omit()
+```
+
+### Korelacja między nox i no2. Widać dużą zależność.
+
+```{r}
+set.seed(222)
+air[sample(1:nrow(air), size = 300, replace = F),] |> 
+  select(nox, no2) |> 
+  ggpairs()
+```
+
+### Stężenia ozonu
+```{r}
+air |>    
+  ggplot(aes(date, o3)) +     
+  geom_line() +     
+  theme_bw()
+```
+
+### Dodanie klasyfikacji
+```{r}
+air <-
+  air |>
+  mutate(ozone = cut(
+    o3,
+    breaks = c(-0.1, 10, 43),
+    labels = c("Niskie", "Wysokie")
+  ))
+air |> count(ozone)
+```
+
+### Przygotowane dane
+```{r}
+air |>
+  skimr::skim()
+```
+
+## Model klasyfikacji
+
+### Podział danych
+```{r}
+set.seed(222)
+data_split <- initial_split(air, strata = ozone)
+train_data <- training(data_split)
+test_data <- testing(data_split)
+```
+
+### Tworzenie przepisu
+
+#### Pierwszy przepis
+``` {r}
+air_recipe <- recipe(ozone ~ ., data = train_data) |>
+  update_role(date, new_role="Data") |>
+  step_date(date, features = c("month", "doy")) |>
+  step_time(date, features = c("hour")) |>
+  # step_normalize(all_numeric_predictors()) |>
+  step_YeoJohnson(all_numeric_predictors(), -all_outcomes()) |>
+  step_dummy(all_nominal_predictors()) |>
+  step_zv(all_predictors()) |>
+  step_corr(all_numeric_predictors(), threshold = 0.9)
+```
+
+Pierwszy przepis miał wiele błędów, jego wyniki w modelu były zbyt doskonałe, krzywa roc wyglądała jak kwadrat, macierz błędów nie miała żadnych błędów, dlatego po wielu próbach dostrajania zrezygnowałem z tego przepisu. Doszedłem do wniosku że powinienem pozbyć się kolumny o3, gdyż za model za bardzo sie na niej opierał.
+
+#### Poprawiony przepis
+``` {r}
+air_recipe_o3 <- recipe(ozone ~ ., data = train_data) |> 
+  step_rm(o3) |> 
+  update_role(date, new_role="Data") |> 
+  step_date(date, features = c("month", "doy")) |> 
+  step_YeoJohnson(all_numeric_predictors(), -all_outcomes()) |> # wartość roc jest lepsza o 0.009
+  step_time(date, features = c("hour")) |> 
+  # step_normalize(all_numeric_predictors()) |> # normalizacja nic nie zmienia
+  step_dummy(all_nominal_predictors()) |> 
+  step_zv(all_predictors())
+```
+
+```{r}
+air_recipe_o3 |> prep() |> bake(train_data) |> _[1:100,] |> DT::datatable()
+```
+
+### Tworzenie modelu
+
+```{r}
+lr_mod <- 
+  logistic_reg(penalty = 0.0001, mixture = 1) |> 
+  set_engine("glmnet")
+```
+
+### Workflow oraz trening
+```{r}
+final_model <- workflow() |> 
+  add_model(lr_mod) |> 
+  add_recipe(air_recipe_o3) 
+```
+
+```{r}
+air_fit <- 
+  final_model |> 
+  fit(data = train_data)
+```
+
+Oraz wyniki treningu:
+```{r}
+air_fit |> 
+  extract_fit_parsnip() |> 
+  tidy()
+```
+
+## Prognozy
+```{r}
+predictions <- predict(air_fit, test_data, type = "prob")
+```
+```{r}
+#| echo: false
+predictions
+```
+
+### Krzywa roc
+```{r}
+pred_test <- 
+  augment(air_fit, test_data) |> 
+  select(.pred_class:date, ozone)
+
+pred_test  |> 
+  roc_curve(truth = ozone, .pred_Niskie) |> 
+  autoplot()
+```
+
+Wartość roc
+```{r}
+pred_test |> 
+  roc_auc(truth = ozone, .pred_Niskie)
+```
+
+Macierz błędów
+```{r}
+pred_test |> conf_mat(truth = ozone, estimate = .pred_class) 

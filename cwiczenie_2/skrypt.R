@@ -71,8 +71,8 @@ test_data <- testing(data_split)
 #   step_YeoJohnson(all_numeric_predictors(), -all_outcomes()) |> 
 #   step_dummy(all_nominal_predictors()) |> 
 #   step_zv(all_predictors()) |> 
-#   step_corr(all_numeric_predictors(), threshold = 0.9) |> 
-#   step_upsample(ozone)
+#   step_corr(all_numeric_predictors(), threshold = 0.9)  
+
 
 
 
