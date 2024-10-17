@@ -53,3 +53,23 @@ air |> count(ozone)
 
 air |>
   skimr::skim()
+
+# Podział danych
+set.seed(222)
+data_split <- initial_split(air, strata = ozone)
+train_data <- training(data_split)
+test_data <- testing(data_split)
+
+
+air_recipe <- recipe(ozone ~ ., data = train_data) |> 
+  step_date(date, features = c("month", "doy")) |> 
+  step_time(date, features = c("hour")) |> 
+  step_normalize(all_numeric_predictors()) |> 
+  step_dummy(all_nominal_predictors()) |> 
+  step_zv(all_predictors())
+
+air_recipe   |> summary()
+
+air_recipe |> prep() |> bake(train_data) |> _[1:100,] |> DT::datatable()
+
+air_recipe |> prep()
