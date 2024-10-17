@@ -49,3 +49,7 @@ air <-
     labels = c("Niskie", "Wysokie")
   ))
 air |> count(ozone)
+
+
+air |>
+  skimr::skim()
