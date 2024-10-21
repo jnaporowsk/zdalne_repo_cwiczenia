@@ -136,3 +136,49 @@ bind_rows(
     accuracy(truth = class, .pred_class)
 ) |>
   knitr::kable(digits = 3)
+
+# CV fold
+
+set.seed("123")
+vfold_cv_resample = vfold_cv(train_data, v=10)
+vfold_cv_resample
+vfold_cv_resample$splits[[1]] %>% analysis() %>% dim()
+
+air_fit_rs <- final_model |> fit_resamples(vfold_cv_resample)
+air_fit_rs |> 
+  collect_metrics() |> 
+  knitr::kable(digits = 3)
+
+
+
+# powtarzane cvfold
+set.seed("123")
+vfold_cv_resample_rep = vfold_cv(train_data, v=10, repeats = 5)
+vfold_cv_resample_rep
+vfold_cv_resample_rep$splits[[1]] %>% analysis() %>% dim()
+
+air_fit_rs_rep <- final_model |> fit_resamples(vfold_cv_resample_rep)
+air_fit_rs_rep |> 
+  collect_metrics() |> 
+  knitr::kable(digits = 3)
+
+
+# monte carlo cv
+set.seed("123")
+mc_cv_resample = mc_cv(train_data, prop=9/10, times = 5)
+mc_cv_resample
+mc_cv_resample$splits[[1]] %>% analysis() %>% dim()
+
+air_fit_rs_mc <- final_model |> fit_resamples(mc_cv_resample)
+air_fit_rs_mc |> 
+  collect_metrics() |> 
+  knitr::kable(digits = 3)
+bind_cols(
+  c(rep("Vfold", 3), rep("Vfold-repeated",3), rep("Monte carlo cv",3)),
+
+bind_rows(
+  air_fit_rs |> collect_metrics() ,
+  air_fit_rs_rep |> collect_metrics() ,
+  air_fit_rs_mc |> collect_metrics() 
+) )|> 
+  knitr::kable(digits = 3)
