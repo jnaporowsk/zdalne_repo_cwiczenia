@@ -18,7 +18,6 @@ air[sample(1:nrow(air), size = 300, replace = F),] |>
   ggpairs()
 
 
-
 library(ggpubr)
 # wykres regresji liniowej, do sprawdzenia danych 
 set.seed(222)
