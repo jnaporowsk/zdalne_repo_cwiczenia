@@ -26,7 +26,7 @@ lm_mod <- linear_reg() |>
 
 lm_fit <- 
   lm_mod |> 
-  fit(ozone ~ solar.r + wind + temp + month, data=air)
+  fit(ozone ~ solar.r + wind * temp, data=air)
 
 lm_fit$fit |> tidy()
 
@@ -44,6 +44,20 @@ ggplot(air, aes(x = ozone, y = predict_ozone$.pred)) +
        y = "Prognozowane Ozone") +
   theme_minimal()
 
+library(yardstick)
+
+multi <- metric_set(mae, rmse, rsq, rsq_trad)
+
+air |> augment(lm_fit, new_data = _) |> 
+  group_by(month) |> 
+  multi(truth = ozone, estimate = .pred) |>  
+  pivot_wider(names_from = .metric, values_from = .estimate) |> 
+  gt::gt() |> 
+  gt::fmt_number(n_sigfig = 3)
+  
 
 # ggally
 ggpairs(air[, c("ozone", "solar.r", "wind", "temp", "month")])
+
+
+
