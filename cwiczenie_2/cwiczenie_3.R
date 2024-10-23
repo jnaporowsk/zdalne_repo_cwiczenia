@@ -137,6 +137,8 @@ bind_rows(
 ) |>
   knitr::kable(digits = 3)
 
+
+## Regresja logistyczna
 # CV fold
 
 set.seed("123")
@@ -173,12 +175,128 @@ air_fit_rs_mc <- final_model |> fit_resamples(mc_cv_resample)
 air_fit_rs_mc |> 
   collect_metrics() |> 
   knitr::kable(digits = 3)
-bind_cols(
-  c(rep("Vfold", 3), rep("Vfold-repeated",3), rep("Monte carlo cv",3)),
+
+# bootstrap
+air_rs_bootstrap <- bootstraps(train_data, times = 5)
+air_rs_bootstrap
+air_rs_bootstrap$splits[[1]] %>% analysis() %>% dim()
+
+air_fit_rs_bootstrap <- final_model |> fit_resamples(air_rs_bootstrap)
+air_fit_rs_bootstrap |> 
+  collect_metrics() |> 
+  knitr::kable(digits = 3)
+
+log_reg_wyniki <- bind_cols(
+  c(rep("Vfold", 3), rep("Vfold-repeated",3), rep("Monte carlo cv",3), rep("Bootstrap",3)),
 
 bind_rows(
   air_fit_rs |> collect_metrics() ,
   air_fit_rs_rep |> collect_metrics() ,
-  air_fit_rs_mc |> collect_metrics() 
-) )|> 
+  air_fit_rs_mc |> collect_metrics(),
+  air_fit_rs_bootstrap |> collect_metrics()
+) )|> tibble()
+
+log_reg_wyniki <- rename(log_reg_wyniki, nazwa_metody = ...1)
+
+
+
+
+
+## metoda lasu losowego
+
+rf_mod <- 
+  rand_forest(trees = 1000) |> 
+  set_engine("ranger") |> 
+  set_mode("classification")
+
+
+rf_wflow <- workflow() |> 
+  add_model(rf_mod) |> 
+  add_recipe(air_recipe_o3) 
+
+# cv fold
+set.seed("123")
+air_rf_folds = vfold_cv(train_data, v=10)
+
+air_rf_folds$splits[[1]] %>% analysis() %>% dim()
+
+air_fit_rf_folds <- rf_wflow |> fit_resamples(air_rf_folds)
+air_fit_rf_folds |> 
+  collect_metrics() |> 
   knitr::kable(digits = 3)
+
+
+# cv fold repeated
+set.seed("123")
+air_rf_folds_rep = vfold_cv(train_data, v=10, repeats = 5)
+
+air_rf_folds_rep$splits[[1]] %>% analysis() %>% dim()
+
+air_fit_rf_folds_rep <- rf_wflow |> fit_resamples(air_rf_folds_rep)
+air_fit_rf_folds_rep |> 
+  collect_metrics() |> 
+  knitr::kable(digits = 3)
+ 
+
+# monte carlo cv
+set.seed("123")
+air_rf_mc = mc_cv(train_data, prop=9/10, times = 5)
+air_rf_mc
+air_rf_mc$splits[[1]] %>% analysis() %>% dim()
+
+air_fit_rf_mc <- rf_wflow |> fit_resamples(air_rf_mc)
+air_fit_rf_mc |> 
+  collect_metrics() |> 
+  knitr::kable(digits = 3)
+
+
+# bootstrap
+air_rf_bootstrap <- bootstraps(train_data, times = 5)
+air_rf_bootstrap
+air_rf_bootstrap$splits[[1]] %>% analysis() %>% dim()
+
+air_fit_rf_bootstrap <- final_model |> fit_resamples(air_rs_bootstrap)
+air_fit_rf_bootstrap |> 
+  collect_metrics() |> 
+  knitr::kable(digits = 3)
+
+rf_wyniki <- bind_cols(
+  c(rep("Vfold", 3), rep("Vfold-repeated",3), rep("Monte carlo cv",3), rep("Bootstrap", 3)),
+  
+  bind_rows(
+    air_fit_rf_folds |> collect_metrics() ,
+    air_fit_rf_folds_rep |> collect_metrics() ,
+    air_fit_rf_mc |> collect_metrics() ,
+    air_fit_rf_bootstrap |> collect_metrics() 
+  ))|> tibble()
+
+rf_wyniki <- rename(rf_wyniki, nazwa_metody = ...1)
+
+wykres_log_reg <- ggplot(log_reg_wyniki, aes(x = nazwa_metody, y = mean, fill = nazwa_metody)) +
+  geom_bar(stat = "identity", position = "dodge") +
+  geom_text(aes(label = round(mean, 3)), 
+            position = position_dodge(width = 0.9), 
+            vjust = -0.5, size = 3) +
+  labs(title = "Regresja logistyczna - Porównanie wyników w zależności od metody walidacji",
+       y = "Wartość metryki",
+       x = " ",
+       fill = "Metoda walidacji") +
+  facet_wrap(~.metric, scales = "free_y") +
+  theme_bw() +
+  theme(axis.text.x = element_blank())
+
+wykres_rf <- ggplot(rf_wyniki, aes(x = nazwa_metody, y = mean, fill = nazwa_metody)) +
+  geom_bar(stat = "identity", position = "dodge") +
+  geom_text(aes(label = round(mean, 3)), 
+            position = position_dodge(width = 0.9), 
+            vjust = -0.5, size = 3) +
+  labs(title = "Las losowy - Porównanie wyników w zależności od metody walidacji",
+       y = "Wartość metryki",
+       x = " ",
+       fill = "Metoda walidacji") +
+  facet_wrap(~.metric, scales = "free_y") +
+  theme_bw() +
+  theme(axis.text.x = element_blank())
+ 
+library(patchwork)
+wykres_rf/wykres_log_reg
