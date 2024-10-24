@@ -206,21 +206,43 @@ pred_test |> conf_mat(truth = ozone, estimate = .pred_class)
 
 # Metoda lasu losowego i walidacje krzyżowe
 
-Zaczniemy od utworzenia modelu lasu losowego oraz ustawienia ziarna. Użyjemy tego samego recipie co wcześniej
+Zaczniemy od utworzenia modelu lasu losowego oraz ustawienia ziarna. Użyjemy tego samego recipie co wcześniej. 
+cw 4.6 Dodatkowo dodajemy hiperparametry
 
 ```{r}
 
 set.seed("123")
 
 rf_mod <- 
-  rand_forest(trees = 1000) |> 
+  rand_forest(trees = tune(),
+              mtry = tune()) |> 
   set_engine("ranger") |> 
   set_mode("classification")
+
+```
+
+Tworzenie siatki oraz workflow.
+```{r}
+mtry_param <- finalize(mtry(), x = train_data)
+rf_mod
+
+siatka <- grid_regular(mtry_param,
+                       trees(), 
+                       levels = 3)
+siatka
+siatka |> count(mtry)
 
 
 rf_wflow <- workflow() |> 
   add_model(rf_mod) |> 
   add_recipe(air_recipe_o3) 
+
+miary_oceny <-
+  yardstick::metric_set(
+    accuracy,
+    mcc,
+    npv,
+    roc_auc)
 ```
 
 ## Walidacje dla lasu losowego
@@ -229,12 +251,28 @@ rf_wflow <- workflow() |>
 
 
 ```{r}
-air_rf_folds = vfold_cv(train_data, v=10)
+set.seed("123")
+air_rf_folds = vfold_cv(train_data, v=5)
 
-air_rf_folds$splits[[1]] %>% analysis() %>% dim()
+air_fit_rf_folds <-
+  rf_wflow |>
+  tune_grid(
+    resamples = air_rf_folds,
+    grid = siatka,
+    metrics = miary_oceny
+  )
 
-air_fit_rf_folds <- rf_wflow |> fit_resamples(air_rf_folds)
 air_fit_rf_folds |> 
+  collect_metrics() |> 
+  knitr::kable(digits = 3)
+
+air_fit_rf_folds |> select_best(metric = "accuracy")
+
+air_fit_rf_folds_best <- rf_wflow |> finalize_workflow(air_fit_rf_folds |> select_best(metric = "accuracy"))
+
+air_fit_rf_folds_final <- air_fit_rf_folds_best |> last_fit(split = data_split)
+
+air_fit_rf_folds_final |> 
   collect_metrics() |> 
   knitr::kable(digits = 3)
 
@@ -244,12 +282,23 @@ air_fit_rf_folds |>
 
 ```{r}
 set.seed("123")
-air_rf_folds_rep = vfold_cv(train_data, v=10, repeats = 5)
+air_rf_folds_rep = vfold_cv(train_data, v=5, repeats = 5)
 
-air_rf_folds_rep$splits[[1]] %>% analysis() %>% dim()
+air_fit_rf_folds_rep <-
+  rf_wflow |>
+  tune_grid(
+    resamples = air_rf_folds_rep,
+    grid = siatka,
+    metrics = miary_oceny
+  )
 
-air_fit_rf_folds_rep <- rf_wflow |> fit_resamples(air_rf_folds_rep)
-air_fit_rf_folds_rep |> 
+air_fit_rf_folds_rep |> select_best(metric = "accuracy")
+
+air_fit_rf_folds_rep_best <- rf_wflow |> finalize_workflow(air_fit_rf_folds_rep |> select_best(metric = "accuracy"))
+
+air_fit_rf_folds_rep_final <- air_fit_rf_folds_rep_best |> last_fit(split = data_split)
+
+air_fit_rf_folds_rep_final |> 
   collect_metrics() |> 
   knitr::kable(digits = 3)
 ```
@@ -258,12 +307,23 @@ air_fit_rf_folds_rep |>
 
 ```{r}
 set.seed("123")
-air_rf_mc = mc_cv(train_data, prop=9/10, times = 10)
-air_rf_mc
-air_rf_mc$splits[[1]] %>% analysis() %>% dim()
+air_rf_mc = mc_cv(train_data, prop=9/10, times = 5)
 
-air_fit_rf_mc <- rf_wflow |> fit_resamples(air_rf_mc)
-air_fit_rf_mc |> 
+air_fit_rf_mc <-
+  rf_wflow |>
+  tune_grid(
+    resamples = air_rf_mc,
+    grid = siatka,
+    metrics = miary_oceny
+  )
+
+air_fit_rf_mc |> select_best(metric = "accuracy")
+
+air_fit_rf_mc_best <- rf_wflow |> finalize_workflow(air_fit_rf_mc |> select_best(metric = "accuracy"))
+
+air_fit_rf_mc_final <- air_fit_rf_mc_best |> last_fit(split = data_split)
+
+air_fit_rf_mc_final |> 
   collect_metrics() |> 
   knitr::kable(digits = 3)
 ```
@@ -271,14 +331,27 @@ air_fit_rf_mc |>
 ### Bootstraping
 
 ```{r}
-air_rf_bootstrap <- bootstraps(train_data, times = 10)
-air_rf_bootstrap
-air_rf_bootstrap$splits[[1]] %>% analysis() %>% dim()
+set.seed("123")
+air_rf_bootstrap <- bootstraps(train_data, times = 5)
 
-air_fit_rf_bootstrap <- final_model |> fit_resamples(air_rf_bootstrap)
-air_fit_rf_bootstrap |> 
+air_fit_rf_bootstrap <-
+  rf_wflow |>
+  tune_grid(
+    resamples = air_rf_bootstrap,
+    grid = siatka,
+    metrics = miary_oceny
+  )
+
+air_fit_rf_bootstrap |> select_best(metric = "accuracy")
+
+air_fit_rf_bootstrap_best <- rf_wflow |> finalize_workflow(air_fit_rf_bootstrap |> select_best(metric = "accuracy"))
+
+air_fit_rf_bootstrap_final <- air_fit_rf_bootstrap_best |> last_fit(split = data_split)
+
+air_fit_rf_bootstrap_final |> 
   collect_metrics() |> 
   knitr::kable(digits = 3)
+
 ```
 
 ### Zapisanie wyników oraz wykres
@@ -288,10 +361,10 @@ rf_wyniki <- bind_cols(
   c(rep("Vfold", 3), rep("Vfold-repeated",3), rep("Monte carlo cv",3), rep("Bootstrap", 3)),
   
   bind_rows(
-    air_fit_rf_folds |> collect_metrics() ,
-    air_fit_rf_folds_rep |> collect_metrics() ,
-    air_fit_rf_mc |> collect_metrics() ,
-    air_fit_rf_bootstrap |> collect_metrics() 
+    air_fit_rf_folds_final |> collect_metrics(),
+    air_fit_rf_folds_rep_final |> collect_metrics(),
+    air_fit_rf_mc_final |> collect_metrics(),
+    air_fit_rf_bootstrap_final |> collect_metrics() 
   ))|> tibble()
 
 rf_wyniki <- rename(rf_wyniki, nazwa_metody = ...1)
@@ -299,9 +372,9 @@ rf_wyniki
 ```
 
 ```{r}
-wykres_rf <- ggplot(rf_wyniki, aes(x = nazwa_metody, y = mean, fill = nazwa_metody)) +
+wykres_rf <- ggplot(rf_wyniki, aes(x = nazwa_metody, y = .estimate, fill = nazwa_metody)) +
   geom_bar(stat = "identity", position = "dodge") +
-  geom_text(aes(label = round(mean, 3)), 
+  geom_text(aes(label = round(.estimate, 3)), 
             position = position_dodge(width = 0.9), 
             vjust = -0.5, size = 3) +
   labs(title = "Las losowy - Porównanie wyników w zależności od metody walidacji",
@@ -317,6 +390,7 @@ wykres_rf
 ## Walidacje dla regresji logistycznej
 
 ### Walidacja krzyżowa V-fold
+
 ```{r}
 vfold_cv_resample = vfold_cv(train_data, v=10)
 vfold_cv_resample
