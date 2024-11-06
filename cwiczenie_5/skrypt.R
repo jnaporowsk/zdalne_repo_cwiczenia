@@ -137,3 +137,35 @@ rf_res |> show_best(metric = "rsq", n=5)
 rf_best <- rf_res |> select_best(metric="rsq")
 
 rf_best
+
+# Model drzewa decyzyjnego
+
+dt_mod <- 
+  decision_tree(
+    cost_complexity = tune(), 
+    tree_depth = tune()) |> 
+  set_engine("rpart") |> 
+  set_mode("regression")
+
+dt_workflow <- 
+  workflow() |> 
+  add_model(dt_mod) |> 
+  add_recipe(data_recipe)
+
+dt_res <- 
+  dt_workflow |> 
+  tune_grid(resamples = val_set, 
+            grid = 25, 
+            control = control_grid(save_pred = T),
+            metrics = metric_set(rsq, rmse))
+
+# wybieramy model z jak najmniejszym cost_complecity Preprocessor1_Model24
+dt_res |> show_best(metric = "rsq", n=5) |>  arrange(desc(cost_complexity))
+
+dt_best <- 
+  dt_res |>   
+  collect_metrics() |> 
+  filter(.config == "Preprocessor1_Model24", .metric == "rsq")
+
+dt_best
+                                                     
