@@ -38,3 +38,15 @@ dane |> select(-wd, - wd_cardinal) |>
 
 dane |> select(-wd, -wd_cardinal, -no, -nox) |> 
   GGally::ggpairs()
+
+data_split <- initial_split(data = dane,
+                            prop = 3/4,
+                            strata = "o3")
+
+data_train <- training(data_split)
+data_test <- testing(data_split)
+
+set.seed(123)
+val_set <- validation_split(data = data_train,
+                            prop = 3/4,
+                            strata = "o3")
