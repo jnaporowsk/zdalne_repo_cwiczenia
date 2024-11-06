@@ -1,3 +1,46 @@
+---
+title: "Klasyfikacja ozonu" 
+author: 
+        - Jakub Naporowski 
+        - Informatyka Geoprzestrzenna
+        - "423583"
+date: today 
+format: 
+  html:
+    toc: true
+    toc-depth: 3
+    toc-location: right
+    toc-title: Spis Treści
+    number-sections: true
+    number-depth: 3
+    html-math-method: katex
+    code-tools: true
+    code-block-bg: true
+    code-fold: show
+    code-summary: "Show and hide code"
+    link-external-icon: true
+    link-external-newwindow: true
+    smooth-scroll: true
+    self-contained: true
+    theme: 
+        dark: solar
+    fontsize: 1.0em
+    linestretch: 1.3
+    fig-align: center
+execute: 
+  echo: true
+  error: false
+  warning: false
+  output: true
+editor_options: 
+  chunk_output_type: console
+---
+
+# Wybór i obróbka danych
+
+## Biblioteki
+```{r}
+#| output: false
 pkg = c(
   "tidymodels",
   "glmnet",
@@ -14,31 +57,39 @@ pkg = c(
 pkg |> 
   purrr::map(.f = ~ require(.x, character.only = T)) ; rm(pkg)
 tidymodels_prefer()
+```
 
-
-importMeta(source = "aurn") |> knitr::kable()
+## Pobranie danych
+```{r}
+importMeta(source = "aurn")
 
 # Nottingham Centre
 dane <- importAURN(site = "nott", year = 2020)
 
 skimr::skim(dane)
+```
 
+## Wybór odpowiednich kolumn oraz zmiana kolumny wd na factor
+```{r}
 dane <- dane |> 
   select(o3, nox, no2, no, ws, wd, air_temp, date) |> 
   na.omit()
 
-# wczytuje funkcje wd_factor, która konwertuej stopnie na 16 kierunków waitru
 source(file = "function_wd_factor.R") 
 
 dane <- dane |> wd_factor() |> na.omit(); dane
+```
 
-
+## Przegląd danych
+```{r}
+#| output: false
 dane |> select(-wd, - wd_cardinal, -date) |> 
   GGally::ggpairs()
+```
 
-dane |> select(-wd, -wd_cardinal, -no, -nox) |> 
-  GGally::ggpairs()
+# Podział danych i modele
 
+```{r}
 data_split <- initial_split(data = dane,
                             prop = 3/4,
                             strata = "o3")
@@ -46,22 +97,14 @@ data_split <- initial_split(data = dane,
 data_train <- training(data_split)
 data_test <- testing(data_split)
 
-
-
 set.seed(123)
 val_set <- validation_split(data = data_train,
                             prop = 3/4,
                             strata = "o3")
+```
 
-# Model regresji liniowej
-
-# model
-lr_mod <- 
-  linear_reg(penalty = tune(), mixture = tune()) |> 
-  set_engine("glmnet") |> 
-  set_mode("regression")
-
-# recipe
+## Utworzenie przepisu
+```{r}
 data_recipe <- recipe(o3 ~ ., data = data_train) |> 
   step_rm(no, nox) |> 
   update_role(date, new_role="Data") |> 
@@ -71,9 +114,27 @@ data_recipe <- recipe(o3 ~ ., data = data_train) |>
   step_dummy(all_nominal_predictors()) |> 
   step_zv(all_predictors())
 
-data_recipe |> prep() |> bake(data_train) |> _[1:100,] |> DT::datatable()
+data_recipe |> prep() |> bake(data_train) |> _[1:10,] |> gt::gt()
+```
 
-# workflow
+W naszych danych no, nox oraz no2 był bardzo mocno skorelowane, dlatego pozbyłem się no oraz nox, zmieniłem role date żeby nie uwzględniać jej w predykcjach, zamiast tego uwtorzone zostały kolumny month i day of the year, oraz kolumna z godziną dnia. 
+
+## Model regresji liniowej
+
+### Utworzenie modelu
+
+```{r}
+lr_mod <- 
+  linear_reg(penalty = tune(), mixture = tune()) |> 
+  set_engine("glmnet") |> 
+  set_mode("regression")
+```
+
+Będziemy optymalizować penalty oraz mixture
+
+### Workflow, siatka oraz tuning
+
+```{r}
 lr_workflow <- 
   workflow() |> 
   add_model(lr_mod) |> 
@@ -89,13 +150,13 @@ lr_res <-
     control = control_grid(save_pred = TRUE),
     metrics = metric_set(rsq, rmse)
   )
+```
 
-# rmse takie samo,mae też, wsm każda statysytka miała praktycznie takie same wartości niezależnie od penalty, 
-# próbowałem zmieniać range w penalty ale pojawiały się błędy których nie wiedziałem jak rozwiązać więc wybrałem 
-# wartość z najwyższym penalty
+### Wybranie najlepszego modelu
+```{r}
 top_models <- 
   lr_res |>
-  show_best(metric = "rsq", n=100) |> 
+  show_best(metric = "rsq", n=10) |> 
   arrange(desc(penalty), .metric)
 
 top_models |> gt::gt()
@@ -106,7 +167,11 @@ lr_best <-
 
 
 lr_best
+```
+Przetestowałem pare statystyk takich jak rmse, mae, rsq, okazało się że wszystkie są bardzo zbliżone do siebie w wartościach. Dlatego wybrałem największe penalty z jak najlepszą wartością
 
+### Finalny model oraz jego wyniki
+```{r}
 lr_final <- 
   lr_workflow |> 
   finalize_workflow(lr_best)
@@ -117,7 +182,12 @@ lr_fit <-
 
 lr_fit |> 
   collect_metrics()
-# Model lasu losowego
+```
+
+## Model lasu losowego
+
+### Utworzenie modelu
+```{r}
 cores <- parallel::detectCores()
 
 rf_mod <-
@@ -127,7 +197,10 @@ rf_mod <-
   set_engine(engine = "ranger",
              num.threads = cores - 1) |>
   set_mode(mode = "regression")
+```
 
+### Worflow oraz tuning
+```{r}
 rf_workflow <- 
   workflow() |> 
   add_model(rf_mod) |> 
@@ -139,13 +212,19 @@ rf_res <-
             grid = 25, 
             control = control_grid(save_pred = T),
             metrics = metric_set(rsq, rmse))
+```
 
+### Wybranie najlepszego modelu
+```{r}
 rf_res |> show_best(metric = "rsq", n=5)
 
 rf_best <- rf_res |> select_best(metric="rsq")
 
 rf_best
+```
 
+### Finalny model oraz jego wyniki 
+```{r}
 rf_final <- 
   rf_workflow |> 
   finalize_workflow(rf_best)
@@ -156,15 +235,22 @@ rf_fit <-
 
 rf_fit |> 
   collect_metrics()
-# Model drzewa decyzyjnego
+```
 
+## Model drzewa decyzyjnego
+
+### utworzenie modelu
+```{r}
 dt_mod <- 
   decision_tree(
     cost_complexity = tune(), 
     tree_depth = tune()) |> 
   set_engine("rpart") |> 
   set_mode("regression")
+```
 
+### Workflow oraz tuning
+```{r}
 dt_workflow <- 
   workflow() |> 
   add_model(dt_mod) |> 
@@ -176,17 +262,22 @@ dt_res <-
             grid = 25, 
             control = control_grid(save_pred = T),
             metrics = metric_set(rsq, rmse))
+```
 
-# wybieramy model z jak najmniejszym cost_complecity 
+### Wybranie najlepszego modelu
+```{r}
 dt_best <- 
   dt_res |> 
   show_best(metric = "rsq", n=5) |>  
   arrange(desc(cost_complexity), .metric) |> 
   slice(1)
 
-
 dt_best
+```
+Podobnie jak przy modelu regresji liniowej, statystki były bardzo podobne dlatego wybraliśmy jak najlepszą z jak najmniejszym cost_complexity
 
+### Finalny model oraz jego wyniki
+```{r}
 dt_final <- 
   dt_workflow |> 
   finalize_workflow(dt_best)
@@ -197,18 +288,23 @@ dt_fit <-
 
 dt_fit |> 
   collect_metrics()
+```
 
+# Wykres z najlepszym modelem
 
-# wykres z najlepszym modelem
-
+## Najlepszy model oraz predykcje 
+```{r}
 final_workflow <- extract_workflow(rf_fit)
 
 prediction <- predict(final_workflow, new_data = data_test)
 
 data_test <- data_test |> 
   mutate(predicted_o3 = prediction$.pred)
+```
+Najlepszym modelem okazał się random_forest
 
-
+## Wykres
+```{r}
 ggplot(data_test, aes(x = o3, y = predicted_o3)) +
   geom_point(color = "red", alpha = 0.5) +  # Wykres rozrzutu
   geom_abline(slope = 1, intercept = 0, color = "white", linetype = "dashed", lwd = 1) +  # Linia idealna
@@ -217,3 +313,4 @@ ggplot(data_test, aes(x = o3, y = predicted_o3)) +
        y = "Przewidywane wartości o3") +
   theme_solarized(light=FALSE) +
   scale_colour_solarized()
+```
