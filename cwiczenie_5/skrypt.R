@@ -30,7 +30,7 @@ dane <- dane |>
 # wczytuje funkcje wd_factor, która konwertuej stopnie na 16 kierunków waitru
 source(file = "function_wd_factor.R") 
 
-dane <- dane |> wd_factor() ; dane
+dane <- dane |> wd_factor() |> na.omit(); dane
 
 
 dane |> select(-wd, - wd_cardinal) |> 
@@ -43,9 +43,9 @@ data_split <- initial_split(data = dane,
                             prop = 3/4,
                             strata = "o3")
 
-data_train <- training(data_split)
-data_test <- testing(data_split)
-data_train <-  na.omit(data_train)
+data_train <- na.omit(training(data_split))
+data_test <- na.omit(testing(data_split))
+
 
 
 set.seed(123)
@@ -81,7 +81,6 @@ lr_workflow <-
 
 lr_grid <- grid_regular(penalty(), mixture(), levels = 25)
 
-view(lr_grid)
 lr_res <-
   lr_workflow |>
   tune_grid(
@@ -93,22 +92,31 @@ lr_res <-
 
 # rmse takie samo,mae też, wsm każda statysytka miała praktycznie takie same wartości niezależnie od penalty, 
 # próbowałem zmieniać range w penalty ale pojawiały się błędy których nie wiedziałem jak rozwiązać więc wybrałem 
-# wartość z najwyższym penalty, czyli Preprocessor1_Model031
+# wartość z najwyższym penalty
 top_models <- 
   lr_res |>
   show_best(metric = "rsq", n=100) |> 
-  arrange(desc(penalty))
+  arrange(desc(penalty), .metric)
 
 top_models |> gt::gt()
 
 lr_best <- 
-  lr_res |> 
-  collect_metrics() |> 
-  filter(.config == "Preprocessor1_Model031", .metric == "rsq")
+  top_models |> 
+  slice(1)
+
 
 lr_best
 
+lr_final <- 
+  lr_workflow |> 
+  finalize_workflow(lr_best)
 
+lr_fit <- 
+  lr_final |> 
+  last_fit(split = data_split)
+
+lr_fit |> 
+  collect_metrics()
 # Model lasu losowego
 cores <- parallel::detectCores()
 
@@ -138,6 +146,16 @@ rf_best <- rf_res |> select_best(metric="rsq")
 
 rf_best
 
+rf_final <- 
+  rf_workflow |> 
+  finalize_workflow(rf_best)
+
+rf_fit <- 
+  rf_final |> 
+  last_fit(split = data_split)
+
+rf_fit |> 
+  collect_metrics()
 # Model drzewa decyzyjnego
 
 dt_mod <- 
@@ -159,13 +177,43 @@ dt_res <-
             control = control_grid(save_pred = T),
             metrics = metric_set(rsq, rmse))
 
-# wybieramy model z jak najmniejszym cost_complecity Preprocessor1_Model24
-dt_res |> show_best(metric = "rsq", n=5) |>  arrange(desc(cost_complexity))
-
+# wybieramy model z jak najmniejszym cost_complecity 
 dt_best <- 
-  dt_res |>   
-  collect_metrics() |> 
-  filter(.config == "Preprocessor1_Model24", .metric == "rsq")
+  dt_res |> 
+  show_best(metric = "rsq", n=5) |>  
+  arrange(desc(cost_complexity), .metric) |> 
+  slice(1)
+
 
 dt_best
-                                                     
+
+dt_final <- 
+  dt_workflow |> 
+  finalize_workflow(dt_best)
+
+dt_fit <- 
+  dt_final |> 
+  last_fit(split = data_split)
+
+dt_fit |> 
+  collect_metrics()
+
+
+# wykres z najlepszym modelem
+
+final_workflow <- extract_workflow(rf_fit)
+
+prediction <- predict(final_workflow, new_data = data_test)
+
+data_test <- data_test |> 
+  mutate(predicted_o3 = prediction$.pred)
+
+
+ggplot(data_test, aes(x = o3, y = predicted_o3)) +
+  geom_point(color = "red", alpha = 0.5) +  # Wykres rozrzutu
+  geom_abline(slope = 1, intercept = 0, color = "white", linetype = "dashed", lwd = 1) +  # Linia idealna
+  labs(title = "Porównanie rzeczywistych i przewidywanych wartości o3",
+       x = "Rzeczywiste wartości o3",
+       y = "Przewidywane wartości o3") +
+  theme_solarized(light=FALSE) +
+  scale_colour_solarized()
