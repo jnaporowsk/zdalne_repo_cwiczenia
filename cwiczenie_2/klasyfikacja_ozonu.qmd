@@ -24,7 +24,6 @@ format:
     self-contained: true
     theme: 
         dark: solar
-        light: flatly
     fontsize: 1.0em
     linestretch: 1.3
     fig-align: center
