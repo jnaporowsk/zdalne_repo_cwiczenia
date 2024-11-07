@@ -1,11 +1,10 @@
 library(parsnip)
 library(tidymodels)
 library(tidyverse)
-
+library(yardstick)
 library(readr)
 library(broom.mixed)
 library(dotwhisker)
-install.packages("GGally")
 library(GGally)
 
 colnames(airquality) <- tolower(colnames(airquality))
@@ -38,13 +37,13 @@ head(air)
 # wykres
 ggplot(air, aes(x = ozone, y = predict_ozone$.pred)) +
   geom_point(color = "blue") +  
-  geom_smooth(method = "lm", se = FALSE, color = "red") +  
+  geom_abline(slope = 1, intercept = 0, color = "red", linetype = "dashed", lwd = 1) +  
   labs(title = "Rzeczywiste vs Prognozowane wartości stężenia ozonu",
        x = "Rzeczywiste Ozone",
        y = "Prognozowane Ozone") +
   theme_minimal()
 
-library(yardstick)
+
 
 multi <- metric_set(mae, rmse, rsq, rsq_trad)
 

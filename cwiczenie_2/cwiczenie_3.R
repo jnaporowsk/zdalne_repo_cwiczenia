@@ -401,3 +401,13 @@ wykres_rf <- ggplot(rf_wyniki, aes(x = nazwa_metody, y = .estimate, fill = nazwa
  
 library(patchwork)
 wykres_rf/wykres_log_reg
+
+
+save(rf_fit_rs, 
+     air_fit_rs_rep, 
+     air_fit_rf_folds, 
+     air_fit_rf_folds_rep, 
+     air_fit_rf_mc,
+     air_fit_rf_bootstrap,
+     file = "data.RData")
+load("data.RData")

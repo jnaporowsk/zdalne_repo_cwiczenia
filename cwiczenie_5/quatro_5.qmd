@@ -1,5 +1,5 @@
 ---
-title: "Klasyfikacja ozonu" 
+title: "Linia regresji ozonu oraz wybranie najlepszego modelu" 
 author: 
         - Jakub Naporowski 
         - Informatyka Geoprzestrzenna
