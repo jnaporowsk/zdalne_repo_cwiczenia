@@ -61,8 +61,10 @@ tidymodels_prefer()
 
 ## Pobranie danych
 ```{r}
+#| output: false
 importMeta(source = "aurn")
-
+```
+```{r}
 # Nottingham Centre
 dane <- importAURN(site = "nott", year = 2020)
 
@@ -82,7 +84,6 @@ dane <- dane |> wd_factor() |> na.omit(); dane
 
 ## Przegląd danych
 ```{r}
-#| output: false
 dane |> select(-wd, - wd_cardinal, -date) |> 
   GGally::ggpairs()
 ```
@@ -291,6 +292,23 @@ dt_fit |>
 ```
 
 # Wykres z najlepszym modelem
+
+## Porównanie modeli
+```{r}
+lr_metrics <- lr_fit |> collect_metrics() |> select(-.estimator, -.config)
+rf_metrics <- rf_fit |> collect_metrics() |> select(-.estimator, -.config)
+dt_metrics <- dt_fit |> collect_metrics() |> select(-.estimator, -.config)
+
+nazwy <- c(
+  rep("Regresja liniowa prosta", 2),
+  rep("Las losowy", 2),
+  rep("Drzewa decyzyjne", 2))
+
+data_compare <-  bind_rows(lr_metrics, rf_metrics, dt_metrics) |> bind_cols(nazwy)
+
+names(data_compare) <- c("Metryka", "Wartość", "Model")
+data_compare
+```
 
 ## Najlepszy model oraz predykcje 
 ```{r}
