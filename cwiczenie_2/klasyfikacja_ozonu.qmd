@@ -48,6 +48,10 @@ library(openair)
 library(glmnet)
 ```
 
+```{r}
+#| echo=FALSE
+load("data.RData")
+```
 # Przygotowanie danych
 
 ## Zaczniemy do wybrania roku i przygotowania danych
@@ -253,7 +257,10 @@ miary_oceny <-
 ```{r}
 set.seed("123")
 air_rf_folds = vfold_cv(train_data, v=5)
+```
 
+```{r}
+#| eval=FALSE
 air_fit_rf_folds <-
   rf_wflow |>
   tune_grid(
@@ -261,7 +268,8 @@ air_fit_rf_folds <-
     grid = siatka,
     metrics = miary_oceny
   )
-
+```
+```{r}
 air_fit_rf_folds |> 
   collect_metrics() |> 
   knitr::kable(digits = 3)
@@ -283,7 +291,10 @@ air_fit_rf_folds_final |>
 ```{r}
 set.seed("123")
 air_rf_folds_rep = vfold_cv(train_data, v=5, repeats = 5)
+```
 
+```{r}
+#| eval=FALSE
 air_fit_rf_folds_rep <-
   rf_wflow |>
   tune_grid(
@@ -291,7 +302,9 @@ air_fit_rf_folds_rep <-
     grid = siatka,
     metrics = miary_oceny
   )
+```
 
+```{r}
 air_fit_rf_folds_rep |> select_best(metric = "accuracy")
 
 air_fit_rf_folds_rep_best <- rf_wflow |> finalize_workflow(air_fit_rf_folds_rep |> select_best(metric = "accuracy"))
@@ -308,7 +321,10 @@ air_fit_rf_folds_rep_final |>
 ```{r}
 set.seed("123")
 air_rf_mc = mc_cv(train_data, prop=9/10, times = 5)
+```
 
+```{r}
+#| eval=FALSE
 air_fit_rf_mc <-
   rf_wflow |>
   tune_grid(
@@ -316,7 +332,9 @@ air_fit_rf_mc <-
     grid = siatka,
     metrics = miary_oceny
   )
+```
 
+```{r}
 air_fit_rf_mc |> select_best(metric = "accuracy")
 
 air_fit_rf_mc_best <- rf_wflow |> finalize_workflow(air_fit_rf_mc |> select_best(metric = "accuracy"))
@@ -333,7 +351,10 @@ air_fit_rf_mc_final |>
 ```{r}
 set.seed("123")
 air_rf_bootstrap <- bootstraps(train_data, times = 5)
+```
 
+```{r}
+#| eval=FALSE
 air_fit_rf_bootstrap <-
   rf_wflow |>
   tune_grid(
@@ -341,7 +362,9 @@ air_fit_rf_bootstrap <-
     grid = siatka,
     metrics = miary_oceny
   )
+```
 
+```{r}
 air_fit_rf_bootstrap |> select_best(metric = "accuracy")
 
 air_fit_rf_bootstrap_best <- rf_wflow |> finalize_workflow(air_fit_rf_bootstrap |> select_best(metric = "accuracy"))
